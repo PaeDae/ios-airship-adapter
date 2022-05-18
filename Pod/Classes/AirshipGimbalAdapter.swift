@@ -139,28 +139,27 @@ import Gimbal
 #if !targetEnvironment(simulator)
 private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     private let source: String = "Gimbal"
+    private let keyBoundaryEvent = "boundaryEvent"
+        
+    var shouldSendRegionEvents = true
+    var customPlaceEventName: String?
+    var customBeaconEventName: String?
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier,
-                                      source: source,
-                                         boundaryEvent: .enter) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .enter)
         
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didBegin: visit)
     }
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit, withDelay delayTime: TimeInterval) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier, source: source, boundaryEvent: .enter) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .enter)
+        
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didBegin: visit, withDelay: delayTime)
     }
 
     func placeManager(_ manager: PlaceManager, didEnd visit: Visit) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier, source: source, boundaryEvent: .exit) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .exit)
+        
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didEnd: visit)
     }
 
@@ -171,5 +170,45 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     func placeManager(_ manager: PlaceManager, didDetect location: CLLocation) {
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didDetect: location)
     }
+    
+    private func trackPlaceEventFor(_ visit: Visit, boundaryEvent: UABoundaryEvent) {
+        if shouldSendRegionEvents,
+           let regionEvent = RegionEvent(regionID: visit.place.identifier,
+                                           source: source,
+                                    boundaryEvent: boundaryEvent) {
+            Airship.analytics.addEvent(regionEvent)
+        }
+
+        if let eventName = customPlaceEventName {
+            let event = CustomEvent(name: eventName)
+
+            event.properties = visitPropertiesFor(visit, boundaryEvent: boundaryEvent)
+
+            event.track()
+        }
+    }
+
+    private func visitPropertiesFor(_ visit: Visit, boundaryEvent: UABoundaryEvent) -> Dictionary<String, Any> {
+        var placeAttributes = Dictionary<String, Any>()
+        for attributeKey in visit.place.attributes.allKeys() {
+            placeAttributes[attributeKey] = visit.place.attributes.string(forKey: attributeKey)
+        }
+        var visitProperties = [
+            "arrivalDate" : visit.arrivalDate,
+            "place" : placeAttributes,
+            "visitID" : visit.visitID,
+            "source" : source,
+            "boundaryEvent" : boundaryEvent
+        ] as [String : Any]
+        if let departureDate = visit.departureDate {
+            visitProperties["departureDate"] = departureDate
+        }
+        if boundaryEvent == .exit {
+            visitProperties["dwellTime"] = visit.dwellTime
+        }
+
+        return visitProperties
+    }
+
 }
 #endif
