@@ -111,6 +111,20 @@ import Gimbal
         print("Stopped Gimbal Adapter");
         #endif
     }
+    
+    /**
+     *  Enables the creation of an Airship CustomEvent whenever a Gimbal place is entered, with a name determined by the passed-in `customEntryEventName`.
+     */
+    @objc open func set(customEntryEventName: String) {
+        self.gimbalDelegate.customEntryEventName = customEntryEventName
+    }
+    
+    /**
+     *  Enables the creation of an Airship CustomEvent whenever a Gimbal place is exited, with a name determined by the passed-in `customExitEventName`.
+     */
+    @objc open func set(customExitEventName: String) {
+        self.gimbalDelegate.customExitEventName = customExitEventName
+    }
 
     @objc private func updateDeviceAttributes() {
         #if !targetEnvironment(simulator)
@@ -142,7 +156,8 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     private let keyBoundaryEvent = "boundaryEvent"
         
     var shouldSendRegionEvents = true
-    var customPlaceEventName: String?
+    var customEntryEventName: String?
+    var customExitEventName: String?
     var customBeaconEventName: String?
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit) {
@@ -179,36 +194,38 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
             Airship.analytics.addEvent(regionEvent)
         }
 
-        if let eventName = customPlaceEventName {
-            let event = CustomEvent(name: eventName)
-
-            event.properties = visitPropertiesFor(visit, boundaryEvent: boundaryEvent)
-
-            event.track()
+        if boundaryEvent == .enter,
+           let eventName = customEntryEventName {
+            createAndTrackEvent(withName: eventName, forVisit: visit, boundaryEvent: boundaryEvent)
+        } else if boundaryEvent == .exit,
+           let eventName = customExitEventName {
+            createAndTrackEvent(withName: eventName, forVisit: visit, boundaryEvent: boundaryEvent)
         }
     }
-
-    private func visitPropertiesFor(_ visit: Visit, boundaryEvent: UABoundaryEvent) -> Dictionary<String, Any> {
+    
+    private func createAndTrackEvent(withName eventName: String,
+                                     forVisit visit: Visit,
+                                     boundaryEvent: UABoundaryEvent) {
+        // create event properties
         var placeAttributes = Dictionary<String, Any>()
         for attributeKey in visit.place.attributes.allKeys() {
             placeAttributes[attributeKey] = visit.place.attributes.string(forKey: attributeKey)
         }
         var visitProperties = [
-            "arrivalDate" : visit.arrivalDate,
             "place" : placeAttributes,
             "visitID" : visit.visitID,
+            "placeIdentifier": visit.place.identifier,
+            "placeName": visit.place.name,
             "source" : source,
-            "boundaryEvent" : boundaryEvent
+            "boundaryEvent" : boundaryEvent.rawValue
         ] as [String : Any]
-        if let departureDate = visit.departureDate {
-            visitProperties["departureDate"] = departureDate
-        }
         if boundaryEvent == .exit {
             visitProperties["dwellTime"] = visit.dwellTime
         }
-
-        return visitProperties
+        
+        let event = CustomEvent(name: eventName)
+        event.properties = visitProperties
+        event.track()
     }
-
 }
 #endif
