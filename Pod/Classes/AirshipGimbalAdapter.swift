@@ -6,6 +6,10 @@ import AirshipKit
 import Gimbal
 #endif
 
+// Keys
+fileprivate let hideBlueToothAlertViewKey = "gmbl_hide_bt_power_alert_view"
+fileprivate let shouldTrackCustomEntryEventsKey = "gmbl_should_track_custom_entry"
+fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
 
 @objc open class AirshipGimbalAdapter : NSObject {
 
@@ -39,9 +43,6 @@ import Gimbal
             #endif
         }
     }
-
-    // Keys
-    private let hideBlueToothAlertViewKey = "gmbl_hide_bt_power_alert_view"
   
 
     /**
@@ -53,6 +54,30 @@ import Gimbal
         }
         set {
             UserDefaults.standard.set(!newValue, forKey: hideBlueToothAlertViewKey)
+        }
+    }
+    
+    /**
+     * Enables creation of CustomEvents when Gimbal place entries are detected.
+     */
+    @objc open var shouldTrackCustomEntryEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomEntryEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackCustomEntryEventsKey)
+        }
+    }
+    
+    /**
+     * Enables creation of CustomEvents when Gimbal place exits are detected.
+     */
+    @objc open var shouldTrackCustomExitEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomExitEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackCustomExitEventsKey)
         }
     }
     
@@ -111,20 +136,6 @@ import Gimbal
         print("Stopped Gimbal Adapter");
         #endif
     }
-    
-    /**
-     *  Enables the creation of an Airship CustomEvent whenever a Gimbal place is entered, with a name determined by the passed-in `customEntryEventName`.
-     */
-    @objc open func set(customEntryEventName: String) {
-        self.gimbalDelegate.customEntryEventName = customEntryEventName
-    }
-    
-    /**
-     *  Enables the creation of an Airship CustomEvent whenever a Gimbal place is exited, with a name determined by the passed-in `customExitEventName`.
-     */
-    @objc open func set(customExitEventName: String) {
-        self.gimbalDelegate.customExitEventName = customExitEventName
-    }
 
     @objc private func updateDeviceAttributes() {
         #if !targetEnvironment(simulator)
@@ -154,10 +165,21 @@ import Gimbal
 private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     private let source: String = "Gimbal"
     private let keyBoundaryEvent = "boundaryEvent"
+    private let customEntryEventName = "gimbal_custom_entry_event"
+    private let customExitEventName = "gimbal_custom_exit_event"
+    
+    private var shouldCreateCustomEntryEvent : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomEntryEventsKey)
+        }
+    }
+    private var shouldCreateCustomExitEvent : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomExitEventsKey)
+        }
+    }
         
     var shouldSendRegionEvents = true
-    var customEntryEventName: String?
-    var customExitEventName: String?
     var customBeaconEventName: String?
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit) {
@@ -194,12 +216,10 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
             Airship.analytics.addEvent(regionEvent)
         }
 
-        if boundaryEvent == .enter,
-           let eventName = customEntryEventName {
-            createAndTrackEvent(withName: eventName, forVisit: visit, boundaryEvent: boundaryEvent)
-        } else if boundaryEvent == .exit,
-           let eventName = customExitEventName {
-            createAndTrackEvent(withName: eventName, forVisit: visit, boundaryEvent: boundaryEvent)
+        if boundaryEvent == .enter, shouldCreateCustomEntryEvent {
+            createAndTrackEvent(withName: customEntryEventName, forVisit: visit, boundaryEvent: boundaryEvent)
+        } else if boundaryEvent == .exit, shouldCreateCustomExitEvent {
+            createAndTrackEvent(withName: customExitEventName, forVisit: visit, boundaryEvent: boundaryEvent)
         }
     }
     
@@ -212,7 +232,7 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
             placeAttributes[attributeKey] = visit.place.attributes.string(forKey: attributeKey)
         }
         var visitProperties = [
-            "place" : placeAttributes,
+            "placeAttributes" : placeAttributes,
             "visitID" : visit.visitID,
             "placeIdentifier": visit.place.identifier,
             "placeName": visit.place.name,
@@ -220,7 +240,7 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
             "boundaryEvent" : boundaryEvent.rawValue
         ] as [String : Any]
         if boundaryEvent == .exit {
-            visitProperties["dwellTime"] = visit.dwellTime
+            visitProperties["dwellTimeInSeconds"] = visit.dwellTime
         }
         
         let event = CustomEvent(name: eventName)
