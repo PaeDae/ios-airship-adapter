@@ -10,6 +10,7 @@ import Gimbal
 fileprivate let hideBlueToothAlertViewKey = "gmbl_hide_bt_power_alert_view"
 fileprivate let shouldTrackCustomEntryEventsKey = "gmbl_should_track_custom_entry"
 fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
+fileprivate let shouldTrackRegionEventsKey = "gmbl_should_track_region_events"
 
 @objc open class AirshipGimbalAdapter : NSObject {
 
@@ -58,7 +59,7 @@ fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
     }
     
     /**
-     * Enables creation of CustomEvents when Gimbal place entries are detected.
+     * Enables creation of UrbanAirship CustomEvents when Gimbal place entries are detected.
      */
     @objc open var shouldTrackCustomEntryEvents : Bool {
         get {
@@ -70,7 +71,7 @@ fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
     }
     
     /**
-     * Enables creation of CustomEvents when Gimbal place exits are detected.
+     * Enables creation of UrbanAirship CustomEvents when Gimbal place exits are detected.
      */
     @objc open var shouldTrackCustomExitEvents : Bool {
         get {
@@ -78,6 +79,18 @@ fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
         }
         set {
             UserDefaults.standard.set(newValue, forKey: shouldTrackCustomExitEventsKey)
+        }
+    }
+    
+    /**
+     * Enables creation of Urban Airship RegionEvents when Gimbal place events are detected.
+     */
+    @objc open var shouldTrackRegionEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackRegionEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackRegionEventsKey)
         }
     }
     
@@ -178,9 +191,11 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
             return UserDefaults.standard.bool(forKey: shouldTrackCustomExitEventsKey)
         }
     }
-        
-    var shouldSendRegionEvents = true
-    var customBeaconEventName: String?
+    private var shouldCreateRegionEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackRegionEventsKey)
+        }
+    }
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit) {
         trackPlaceEventFor(visit, boundaryEvent: .enter)
@@ -209,7 +224,7 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     }
     
     private func trackPlaceEventFor(_ visit: Visit, boundaryEvent: UABoundaryEvent) {
-        if shouldSendRegionEvents,
+        if shouldCreateRegionEvents,
            let regionEvent = RegionEvent(regionID: visit.place.identifier,
                                            source: source,
                                     boundaryEvent: boundaryEvent) {
