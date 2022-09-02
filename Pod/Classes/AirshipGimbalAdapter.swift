@@ -242,18 +242,20 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
                                      forVisit visit: Visit,
                                      boundaryEvent: UABoundaryEvent) {
         // create event properties
+        var visitProperties:[String : Any] = [:]
+        visitProperties["visitID"] = visit.visitID
+        visitProperties["placeIdentifier"] = visit.place.identifier
+        visitProperties["placeName"] = visit.place.name
+        visitProperties["source"] = source
+        visitProperties["boundaryEvent"] = boundaryEvent.rawValue
         var placeAttributes = Dictionary<String, Any>()
         for attributeKey in visit.place.attributes.allKeys() {
-            placeAttributes[attributeKey] = visit.place.attributes.string(forKey: attributeKey)
+            if let value = visit.place.attributes.string(forKey: attributeKey) {
+                placeAttributes[attributeKey] = value
+                visitProperties.updateValue(value, forKey: "GMBL_PA_\(attributeKey)")
+            }
         }
-        var visitProperties = [
-            "placeAttributes" : placeAttributes,
-            "visitID" : visit.visitID,
-            "placeIdentifier": visit.place.identifier,
-            "placeName": visit.place.name,
-            "source" : source,
-            "boundaryEvent" : boundaryEvent.rawValue
-        ] as [String : Any]
+        visitProperties["placeAttributes"] = placeAttributes
         if boundaryEvent == .exit {
             visitProperties["dwellTimeInSeconds"] = visit.dwellTime
         }
