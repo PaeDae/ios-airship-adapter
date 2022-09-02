@@ -12,7 +12,7 @@ fileprivate let shouldTrackCustomEntryEventsKey = "gmbl_should_track_custom_entr
 fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
 fileprivate let shouldTrackRegionEventsKey = "gmbl_should_track_region_events"
 
-@objc open class AirshipGimbalAdapter : NSObject {
+@objc open class AirshipAdapter : NSObject {
 
     /**
      * Singleton access.
