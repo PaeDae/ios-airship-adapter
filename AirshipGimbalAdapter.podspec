@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version                 = "4.0.0"
   s.name                    = "GimbalAirshipAdapter"
   s.summary                 = "An adapter for integrating Gimbal place events with Airship."
-  s.documentation_url       = "https://github.com/PaeDae/ios-airship-adapter"
+  s.documentation_url       = "https://github.com/gimbalinc/ios-airship-adapter"
   s.homepage                = "https://infillion.com/commerce/gimbal/"
   s.author                  = { "Gimbal" => "support@infillion.com" }
   s.license                 = { :type => "Apache License, Version 2.0", :file => "LICENSE" }

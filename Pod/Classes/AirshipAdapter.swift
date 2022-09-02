@@ -255,7 +255,6 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
                 visitProperties.updateValue(value, forKey: "GMBL_PA_\(attributeKey)")
             }
         }
-        visitProperties["placeAttributes"] = placeAttributes
         if boundaryEvent == .exit {
             visitProperties["dwellTimeInSeconds"] = visit.dwellTime
         }
