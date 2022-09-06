@@ -6,8 +6,13 @@ import AirshipKit
 import Gimbal
 #endif
 
+// Keys
+fileprivate let hideBlueToothAlertViewKey = "gmbl_hide_bt_power_alert_view"
+fileprivate let shouldTrackCustomEntryEventsKey = "gmbl_should_track_custom_entry"
+fileprivate let shouldTrackCustomExitEventsKey = "gmbl_should_track_custom_exit"
+fileprivate let shouldTrackRegionEventsKey = "gmbl_should_track_region_events"
 
-@objc open class AirshipGimbalAdapter : NSObject {
+@objc open class AirshipAdapter : NSObject {
 
     /**
      * Singleton access.
@@ -39,9 +44,6 @@ import Gimbal
             #endif
         }
     }
-
-    // Keys
-    private let hideBlueToothAlertViewKey = "gmbl_hide_bt_power_alert_view"
   
 
     /**
@@ -53,6 +55,42 @@ import Gimbal
         }
         set {
             UserDefaults.standard.set(!newValue, forKey: hideBlueToothAlertViewKey)
+        }
+    }
+    
+    /**
+     * Enables creation of UrbanAirship CustomEvents when Gimbal place entries are detected.
+     */
+    @objc open var shouldTrackCustomEntryEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomEntryEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackCustomEntryEventsKey)
+        }
+    }
+    
+    /**
+     * Enables creation of UrbanAirship CustomEvents when Gimbal place exits are detected.
+     */
+    @objc open var shouldTrackCustomExitEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomExitEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackCustomExitEventsKey)
+        }
+    }
+    
+    /**
+     * Enables creation of Urban Airship RegionEvents when Gimbal place events are detected.
+     */
+    @objc open var shouldTrackRegionEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackRegionEventsKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shouldTrackRegionEventsKey)
         }
     }
     
@@ -139,28 +177,41 @@ import Gimbal
 #if !targetEnvironment(simulator)
 private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
     private let source: String = "Gimbal"
+    private let keyBoundaryEvent = "boundaryEvent"
+    private let customEntryEventName = "gimbal_custom_entry_event"
+    private let customExitEventName = "gimbal_custom_exit_event"
+    
+    private var shouldCreateCustomEntryEvent : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomEntryEventsKey)
+        }
+    }
+    private var shouldCreateCustomExitEvent : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackCustomExitEventsKey)
+        }
+    }
+    private var shouldCreateRegionEvents : Bool {
+        get {
+            return UserDefaults.standard.bool(forKey: shouldTrackRegionEventsKey)
+        }
+    }
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier,
-                                      source: source,
-                                         boundaryEvent: .enter) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .enter)
         
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didBegin: visit)
     }
 
     func placeManager(_ manager: PlaceManager, didBegin visit: Visit, withDelay delayTime: TimeInterval) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier, source: source, boundaryEvent: .enter) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .enter)
+        
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didBegin: visit, withDelay: delayTime)
     }
 
     func placeManager(_ manager: PlaceManager, didEnd visit: Visit) {
-        if let regionEvent = RegionEvent(regionID: visit.place.identifier, source: source, boundaryEvent: .exit) {
-            Airship.analytics.addEvent(regionEvent)
-        }
+        trackPlaceEventFor(visit, boundaryEvent: .exit)
+        
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didEnd: visit)
     }
 
@@ -170,6 +221,47 @@ private class AirshipGimbalDelegate : NSObject, PlaceManagerDelegate {
 
     func placeManager(_ manager: PlaceManager, didDetect location: CLLocation) {
         AirshipGimbalAdapter.shared.delegate?.placeManager?(manager, didDetect: location)
+    }
+    
+    private func trackPlaceEventFor(_ visit: Visit, boundaryEvent: UABoundaryEvent) {
+        if shouldCreateRegionEvents,
+           let regionEvent = RegionEvent(regionID: visit.place.identifier,
+                                           source: source,
+                                    boundaryEvent: boundaryEvent) {
+            Airship.analytics.addEvent(regionEvent)
+        }
+
+        if boundaryEvent == .enter, shouldCreateCustomEntryEvent {
+            createAndTrackEvent(withName: customEntryEventName, forVisit: visit, boundaryEvent: boundaryEvent)
+        } else if boundaryEvent == .exit, shouldCreateCustomExitEvent {
+            createAndTrackEvent(withName: customExitEventName, forVisit: visit, boundaryEvent: boundaryEvent)
+        }
+    }
+    
+    private func createAndTrackEvent(withName eventName: String,
+                                     forVisit visit: Visit,
+                                     boundaryEvent: UABoundaryEvent) {
+        // create event properties
+        var visitProperties:[String : Any] = [:]
+        visitProperties["visitID"] = visit.visitID
+        visitProperties["placeIdentifier"] = visit.place.identifier
+        visitProperties["placeName"] = visit.place.name
+        visitProperties["source"] = source
+        visitProperties["boundaryEvent"] = boundaryEvent.rawValue
+        var placeAttributes = Dictionary<String, Any>()
+        for attributeKey in visit.place.attributes.allKeys() {
+            if let value = visit.place.attributes.string(forKey: attributeKey) {
+                placeAttributes[attributeKey] = value
+                visitProperties.updateValue(value, forKey: "GMBL_PA_\(attributeKey)")
+            }
+        }
+        if boundaryEvent == .exit {
+            visitProperties["dwellTimeInSeconds"] = visit.dwellTime
+        }
+        
+        let event = CustomEvent(name: eventName)
+        event.properties = visitProperties
+        event.track()
     }
 }
 #endif
