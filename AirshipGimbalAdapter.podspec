@@ -1,6 +1,6 @@
 
 Pod::Spec.new do |s|
-  s.version                 = "4.0.0"
+  s.version                 = "1.0.0"
   s.name                    = "GimbalAirshipAdapter"
   s.summary                 = "An adapter for integrating Gimbal place events with Airship."
   s.documentation_url       = "https://github.com/gimbalinc/ios-airship-adapter"
